@@ -5,6 +5,8 @@ import dpkt
 import socket
 import binascii
 import sys
+from xml.dom import minidom
+
 
 from cap_model import *
 
@@ -19,9 +21,13 @@ class Capture():
         self.orphan_packets=[]
         self.__udp_packets=[]
         Base.metadata.create_all(engine)
-        self.__well_known_udp=(53,67,69,79,88,113,119,123,135,137,138,139,161,162)
-        self.__well_known_tcp=(20,21,22,25,53,110,80,443,1712)
+        #self.__well_known_udp=(53,67,69,79,88,113,119,123,135,137,138,139,161,162)
+        #self.__well_known_tcp=(20,21,22,25,53,110,80,443,1712)
+        self.__well_known_tcp=dict()
+        self.__well_known_udp=dict()
+        self.__load_ports_from_xml()
         self.stats=dict()
+
 
     def open(self, fich):
         try:
@@ -63,15 +69,31 @@ class Capture():
             self.stats['packets']+=c.packets
             self.stats['bytes']+=c.bytes
             if c.proto==u"tcp":
-                self.stats['packets_tcp']+=1
-                self.stats['bytes_tcp']+=c.packets
+                self.stats['packets_tcp']+=c.packets
+                self.stats['bytes_tcp']+=c.bytes
             elif c.proto==u"udp":
-                self.stats['packets_udp']+=1
-                self.stats['bytes_udp']+=c.packets
+                self.stats['packets_udp']+=c.packets
+                self.stats['bytes_udp']+=c.bytes
             else:
-                self.stats['packets_other']+=1
+                self.stats['packets_other']+=c.packets
                 self.stats['bytes_other']+=c.packets
         return self.stats
+
+    def proto_share(self,proto=u"tcp",type="packets"):
+        """
+        :param proto: tcp | udp
+        :param type: packets | bytes
+        :return: dictionary. key=proto, value=sum of type
+        """
+        tcp_convs=self.dbsession.query(conversation).filter(conversation.proto==proto,
+                                                            conversation.capture_id==self.dbcapture.id)
+        d=dict()
+        for c in tcp_convs:
+            if c.port in d:
+                d[c.port]+=getattr(c,type)
+            else:
+                d[c.port]=getattr(c,type)
+        return d
 
 
     def analyze(self):
@@ -225,8 +247,15 @@ class Capture():
         return servers
 
     @property
+    def conversations(self):
+        convs=self.dbsession.query(conversation).filter(conversation.capture_id==self.dbcapture.id).all()
+        convs_list=map(lambda c: (c.ipsrc_ip,c.ipdst_ip,c.port,c.proto,c.packets,c.bytes), convs)
+        return convs_list
+
+
+    @property
     def orphans(self):
-        orphs=self.dbsession.query(orphan).filter(conversation.capture_id==self.dbcapture.id).all()
+        orphs=self.dbsession.query(orphan).filter(orphan.capture_id==self.dbcapture.id).all()
         orphan_list=map(lambda w: (w.ipsrc,w.portsrc,w.ipdst,w.portdst,w.proto,w.packets,w.bytes), orphs)
         return orphan_list
 
@@ -237,7 +266,11 @@ class Capture():
         captures=map(lambda c: (c.id,c.filename,c.description), caps)
         return captures
 
-
+    @property
+    def services(self):
+        servs=self.dbsession.query(service).order_by(service.proto.asc(),service.port.asc()).all()
+        services=map(lambda s: (s.proto,s.port,s.description), servs)
+        return services
 
     def add_ip(self, ipa, mac):
         """Adds an IP address to the current capture"""
@@ -262,6 +295,12 @@ class Capture():
             # Already exists
             return a[0]
         else:
+            serv=self.dbsession.query(service).filter(service.port==port,service.proto==proto,
+                                                      service.capture_id==self.dbcapture.id).all()
+            if len(serv)==0:
+                serv=service(port=port,proto=proto,capture_id=self.dbcapture.id)
+                self.dbsession.add(serv)
+
             conv1=conversation(ipsrc_ip=ips,ipdst_ip=ipd,proto=proto,port=port, \
                                capture_id=self.dbcapture.id,packets=packets,bytes=packet_size)
             self.dbsession.add(conv1)
@@ -372,3 +411,17 @@ class Capture():
             return True
         else:
             return False
+
+
+    def __load_ports_from_xml(self):
+        xmldoc = minidom.parse('wkservices.xml')
+        itemlist = xmldoc.getElementsByTagName('service')
+        for s in itemlist:
+            proto=s.getElementsByTagName('proto')[0].firstChild.data
+            descr=s.getElementsByTagName('description')[0].firstChild.data
+            port=s.getElementsByTagName('port')[0].firstChild.data
+            if proto=="TCP":
+                l=self.__well_known_tcp
+            else:
+                l=self.__well_known_udp
+            l[port]=descr

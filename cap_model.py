@@ -37,7 +37,7 @@ class conversation(Base):
     packets = Column('packets',Integer)
     bytes = Column('bytes',Integer)
     capture_id=Column(Integer,ForeignKey('capture.id'))
-    service_id=Column(Unicode,ForeignKey('service.id'))
+    #service_id=Column(Unicode,ForeignKey('service.id'))
     ipsrc_ip=Column(Unicode,ForeignKey('ip.ip'))
     ipdst_ip=Column(Unicode,ForeignKey('ip.ip'))
 
@@ -60,6 +60,7 @@ class service(Base):
     id=Column('id',Integer,primary_key=True)
     port = Column('port',Integer)
     proto = Column('proto',Unicode)
+    description=Column('description',Unicode)
     capture_id=Column(Integer,ForeignKey('capture.id'))
 
 

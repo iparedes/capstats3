@@ -1,8 +1,10 @@
 __author__ = 'nacho'
 
 import sys
+import operator
 import cmd
 import Capture
+
 from cap_model import *
 
 from os import listdir
@@ -54,10 +56,25 @@ class Preter(cmd.Cmd):
 
     def do_show_orphans(self,line):
         orphan=self.cap.orphans
-        cont=0
+        cont=1
         for i in orphan:
             print str(cont)+") "+i[0]+":"+str(i[1])+" -> "+i[2]+":"+str(i[3])+" "+i[4]
             cont+=1
+
+    def do_show_conversations(self,line):
+        convs=self.cap.conversations
+        cont=1
+        for c in convs:
+            print str(cont)+") "+c[0]+"->"+c[1]+str(c[2])+"/"+c[3]+" ("+str(c[4])+" packets, "+str(c[5])+" bytes)"
+            cont+=1
+
+    def do_show_services(self,line):
+        servs=self.cap.services
+        cont=1
+        for i in servs:
+            print str(cont)+") "+i[0]+"/"+str(i[1])+" "+str(i[2])
+            cont+=1
+
 
     def do_analyze_orphans(self,line):
         self.cap.analyze_orphans()
@@ -87,18 +104,13 @@ class Preter(cmd.Cmd):
         self.cap.dbsession.commit()
 
 
-    def do_stats(self,line):
-        D=self.cap.statistics()
-        print "Capture: "+str(D['id'])+" ("+D['filename']+")"
-        print "Description: "+str(D['description'])
-        print "Packets: "+str(D['packets'])
-        print "Bytes: "+str(D['bytes'])
-        print "Conversations: "+str(D['nconversations'])
-        print "Orphans: "+str(D['norphans'])
-
 
     def do_orphans(self,line):
         p=PreterOrphan(self.cap)
+        p.cmdloop()
+
+    def do_stats(self,line):
+        p=PreterStats(self.cap)
         p.cmdloop()
 
 
@@ -157,3 +169,51 @@ class PreterOrphan(cmd.Cmd):
         else:
             self.cap.reverse_orphan(i-1)
             self.cap.dbsession.commit()
+
+
+class PreterStats(cmd.Cmd):
+    def __init__(self,cap):
+        cmd.Cmd.__init__(self)
+        self.old_prompt=cmd.Cmd.prompt
+        cmd.Cmd.prompt='Stats>>> '
+        self.cap=cap
+        self.cap.statistics()
+
+    def do_quit(self,line):
+        cmd.Cmd.prompt=self.old_prompt
+        return True
+
+    def do_stats(self,line):
+        D=self.cap.statistics()
+        print "Capture: "+str(D['id'])+" ("+D['filename']+")"
+        print "Description: "+str(D['description'])
+        print "Packets: "+str(D['packets'])
+        print "Bytes: "+str(D['bytes'])
+        print "Conversations: "+str(D['nconversations'])
+        print "Orphans: "+str(D['norphans'])
+
+    def do_protocol_stats(self,line):
+        l=line.split()
+        if len(l)!=2:
+            print "*** need to provide two parameters:"
+            print "\t (t(cp)|u(dp)) (p(ackets)|b(ytes))"
+            return
+
+        if l[1][0]=="b":
+            dato="bytes"
+        else:
+            dato="packets"
+
+        if l[0][0]=="u":
+            proto=u"udp"
+        else:
+            proto=u"tcp"
+
+        stotal=dato+"_"+proto
+        total=self.cap.stats[stotal]
+
+        s=self.cap.proto_share(proto,dato)
+        sorted_s = sorted(s.items(), key=operator.itemgetter(1))
+
+        for i in sorted_s:
+            print str(i[0])+"/"+proto+" "+str(i[1])+" "+dato+" ("+str(total)+")"
