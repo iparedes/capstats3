@@ -103,6 +103,12 @@ class Preter(cmd.Cmd):
         self.cap.merge()
         self.cap.dbsession.commit()
 
+    def do_multihomed(self,line):
+        m=self.cap.multihomed
+        for key in m:
+            print key
+            for i in m[key]:
+                print "\t"+i
 
 
     def do_orphans(self,line):
@@ -161,6 +167,11 @@ class PreterOrphan(cmd.Cmd):
             cont+=1
 
     def do_reverse(self,line):
+        if len(line)<1:
+            print "One parameter needed:"
+            print "\treverse id"
+            return
+
         i=int(line)
         list=self.cap.orphans
         lon=len(list)

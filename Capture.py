@@ -9,8 +9,8 @@ from xml.dom import minidom
 
 
 from cap_model import *
-
-from sqlalchemy import exc,MetaData,Table
+from sqlalchemy import func
+#from sqlalchemy import exc,MetaData,Table
 
 class Capture():
     def __init__(self):
@@ -49,7 +49,7 @@ class Capture():
 
     def statistics(self):
         orphans=self.dbsession.query(orphan).all()
-        conversations=self.dbsession.query(conversation).all()
+        conversations=self.dbsession.query(conversation).filter(conversation.capture_id==self.dbcapture.id).all()
         self.stats['id']=self.dbcapture.id
         a=self.dbsession.query(capture).filter(capture.id==self.dbcapture.id).first()
         self.stats['filename']=a.filename
@@ -65,7 +65,7 @@ class Capture():
         self.stats['packets_other']=0
         self.stats['bytes_other']=0
         for c in conversations:
-            self.stats['nconversations']+=1
+            #self.stats['nconversations']+=1
             self.stats['packets']+=c.packets
             self.stats['bytes']+=c.bytes
             if c.proto==u"tcp":
@@ -271,6 +271,17 @@ class Capture():
         servs=self.dbsession.query(service).order_by(service.proto.asc(),service.port.asc()).all()
         services=map(lambda s: (s.proto,s.port,s.description), servs)
         return services
+
+    @property
+    def multihomed(self):
+        m=self.dbsession.query(ip).filter(ip.capture_id==self.dbcapture.id).group_by(ip.mac).having(func.count(ip.mac)>1).all()
+        d=dict()
+        for mac in m:
+            ips=self.dbsession.query(ip).filter(ip.mac==mac.mac,ip.capture_id==self.dbcapture.id).all()
+            a=map(lambda ipes: (ipes.ip), ips)
+            b=sorted(a, key=lambda item: socket.inet_aton(item))
+            d[mac.mac]=b
+        return d
 
     def add_ip(self, ipa, mac):
         """Adds an IP address to the current capture"""
