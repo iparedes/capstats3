@@ -254,6 +254,15 @@ class Capture():
         pass
 
 
+    @property
+    def ips(self):
+        """Returns a list of tuples (ip,mac,description)
+        """
+        i=self.dbsession.query(ip).filter(ip.capture_id==self.dbcapture.id).all()
+        ips=[]
+        for x in i:
+          ips.append((x.ip,x.mac,x.description))
+        return ips
 
     @property
     def servers(self):
@@ -314,6 +323,15 @@ class Capture():
             #self.dbsession.commit()
             return ip1
 
+
+    def orphan_to_conv(self,index):
+        orphs=self.dbsession.query(orphan).filter(orphan.capture_id==self.dbcapture.id).all()
+        o=orphs[index-1]
+        self.dbsession.delete(o)
+        self.add_conv(o.ipsrc,o.ipdst,o.proto,o.portdst,o.bytes,o.packets)
+        self.dbsession.commit()
+
+
     def add_conv(self,ips,ipd,proto,port,packet_size,packets=1):
         """Adds a conversation to the current capture"""
         a=self.dbsession.query(conversation).filter(conversation.ipsrc_ip==ips, conversation.ipdst_ip==ipd, \
@@ -345,9 +363,15 @@ class Capture():
             self.add_conv(o.ipsrc,o.ipdst,o.proto,o.portdst,o.bytes,o.packets)
             self.dbsession.delete(o)
         self.dbsession.flush()
+        self.dbsession.commit()
 
 
     def reverse_orphan(self,i):
+        """
+        Reverses the flow of an orphan
+        :param i: index of the orphan in the list of orphans
+        :return:
+        """
         list=self.dbsession.query(orphan).all()
         o=list[i]
         ip,prt=o.ipsrc,o.portsrc
@@ -356,14 +380,33 @@ class Capture():
         o.ipdst=ip
         o.portdst=prt
         self.dbsession.flush()
+        self.dbsession.commit()
 
     def service_name(self,proto,port):
+        """
+        :param proto: tcp || udp
+        :param port: port number (integer)
+        :return: description of the proto/port in the capture, or ? if not available
+        """
         n=self.dbsession.query(service).filter(service.capture_id==self.dbcapture.id,
                                                service.proto==proto,service.port==port).all()
         if len(n)>0:
             return n[0].description
         else:
             return '?'
+
+    def set_service_name(self,proto,port,description):
+        """
+        :param proto: tcp || udp
+        :param port: port number (integer)
+        :param description: Description of the service (string)
+        :return:
+        """
+        n=self.dbsession.query(service).filter(service.capture_id==self.dbcapture.id,
+                                               service.proto==proto,service.port==port).first()
+        n.description=description
+        self.dbsession.flush()
+        self.dbsession.commit()
 
     def __add_orphan(self,macsrc,ipsrc,portsrc,macdst,ipdst,portdst,proto,bytes):
         # check if the flow already exists

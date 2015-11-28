@@ -25,6 +25,7 @@ class ip(Base):
     #id = Column('id', Integer, primary_key = True)
     mac = Column('mac', Unicode)
     ip = Column('ip', Unicode,primary_key=True)
+    description=Column('description',Unicode)
     capture_id=Column(Integer,ForeignKey('capture.id'),primary_key=True)
     convsrc=relationship('conversation',backref=backref('ip'),primaryjoin="conversation.ipsrc_ip==ip.ip")
     convdst=relationship('conversation',primaryjoin="conversation.ipdst_ip==ip.ip")

@@ -4,13 +4,12 @@ import sys
 import operator
 import cmd
 import Capture
-#from Treemap import *
+import readline
 
 from cap_model import *
 
 from os import listdir
 
-#from Tree import Tree
 
 
 
@@ -124,11 +123,14 @@ class Preter(cmd.Cmd):
         p=PreterStats(self.cap)
         p.cmdloop()
 
+    def do_services(self,line):
+        p=PreterSvcs(self.cap)
+        p.cmdloop()
 
     def do_list_ips(self,line):
-        l=self.cap.ips()
+        l=self.cap.ips
         for i in l:
-            print i
+            print i[0]
 
     def help_list_ips(self):
         print 'lists IP addresses present in the current capture'
@@ -186,6 +188,51 @@ class PreterOrphan(cmd.Cmd):
             self.cap.reverse_orphan(i-1)
             self.cap.dbsession.commit()
 
+
+    def do_conv(self,line):
+        orphans=self.cap.orphans
+        num=len(orphans)
+        i=int(line)
+        if (i>num):
+            print "Not such orphan"
+            return
+        else:
+            self.cap.orphan_to_conv(i)
+
+
+    def help_conv(self,line):
+        print "Converts an orphan to conversation"
+
+class PreterSvcs(cmd.Cmd):
+    def __init__(self,cap):
+        cmd.Cmd.__init__(self)
+        self.old_prompt=cmd.Cmd.prompt
+        cmd.Cmd.prompt='Services>>> '
+        self.cap=cap
+
+    def do_quit(self,line):
+        cmd.Cmd.prompt=self.old_prompt
+        return True
+
+    def do_show(self,line):
+        servs=self.cap.services
+        cont=1
+        for i in servs:
+            print str(cont)+") "+i[0]+"/"+str(i[1])+" "+str(i[2])
+            cont+=1
+
+    def do_descr(self,line):
+        i=int(line)
+        svcs=self.cap.services
+        num=len(svcs)
+        if (i>num):
+            print "Not such orphan"
+            return
+        else:
+            proto=svcs[i-1][0]
+            port=svcs[i-1][1]
+            s = unicode(raw_input("Description: "))
+            self.cap.set_service_name(proto,port,s)
 
 class PreterStats(cmd.Cmd):
     def __init__(self,cap):
