@@ -64,6 +64,10 @@ class Capture():
         self.stats['bytes_udp']=0
         self.stats['packets_other']=0
         self.stats['bytes_other']=0
+        self.stats['bytes_tcpshare']=dict()
+        self.stats['bytes_udpshare']=dict()
+        self.stats['pkts_tcpshare']=dict()
+        self.stats['pkts_udpshare']=dict()
         for c in conversations:
             #self.stats['nconversations']+=1
             self.stats['packets']+=c.packets
@@ -71,9 +75,22 @@ class Capture():
             if c.proto==u"tcp":
                 self.stats['packets_tcp']+=c.packets
                 self.stats['bytes_tcp']+=c.bytes
+                if c.port in self.stats['pkts_tcpshare']:
+                    self.stats['bytes_tcpshare'][c.port]+=c.bytes
+                    self.stats['pkts_tcpshare'][c.port]+=c.packets
+                else:
+                    self.stats['bytes_tcpshare'][c.port]=c.bytes
+                    self.stats['pkts_tcpshare'][c.port]=c.packets
             elif c.proto==u"udp":
                 self.stats['packets_udp']+=c.packets
                 self.stats['bytes_udp']+=c.bytes
+                if c.port in self.stats['pkts_udpshare']:
+                    self.stats['bytes_udpshare'][c.port]+=c.bytes
+                    self.stats['pkts_udpshare'][c.port]+=c.packets
+                else:
+                    self.stats['bytes_udpshare'][c.port]=c.bytes
+                    self.stats['pkts_udpshare'][c.port]=c.packets
+
             else:
                 self.stats['packets_other']+=c.packets
                 self.stats['bytes_other']+=c.packets
@@ -309,7 +326,11 @@ class Capture():
             serv=self.dbsession.query(service).filter(service.port==port,service.proto==proto,
                                                       service.capture_id==self.dbcapture.id).all()
             if len(serv)==0:
-                serv=service(port=port,proto=proto,capture_id=self.dbcapture.id)
+                if proto==u"tcp":
+                    descr=self.__well_known_tcp.get(str(port),u"-")
+                else:
+                    descr=self.__well_known_udp.get(str(port),u"-")
+                serv=service(port=port,proto=proto,description=descr,capture_id=self.dbcapture.id)
                 self.dbsession.add(serv)
 
             conv1=conversation(ipsrc_ip=ips,ipdst_ip=ipd,proto=proto,port=port, \
@@ -336,7 +357,13 @@ class Capture():
         o.portdst=prt
         self.dbsession.flush()
 
-
+    def service_name(self,proto,port):
+        n=self.dbsession.query(service).filter(service.capture_id==self.dbcapture.id,
+                                               service.proto==proto,service.port==port).all()
+        if len(n)>0:
+            return n[0].description
+        else:
+            return '?'
 
     def __add_orphan(self,macsrc,ipsrc,portsrc,macdst,ipdst,portdst,proto,bytes):
         # check if the flow already exists

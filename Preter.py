@@ -4,10 +4,15 @@ import sys
 import operator
 import cmd
 import Capture
+#from Treemap import *
 
 from cap_model import *
 
 from os import listdir
+
+#from Tree import Tree
+
+
 
 class Preter(cmd.Cmd):
     """Interpreter"""
@@ -228,3 +233,64 @@ class PreterStats(cmd.Cmd):
 
         for i in sorted_s:
             print str(i[0])+"/"+proto+" "+str(i[1])+" "+dato+" ("+str(total)+")"
+
+    def do_share(self,line):
+        l=line.split()
+        if len(l)!=2:
+            print "*** need to provide two parameters:"
+            print "\t (t(cp)|u(dp)) (p(ackets)|b(ytes))"
+            return
+
+        if l[1][0]=="b":
+            dato="bytes"
+        else:
+            dato="packets"
+
+        if l[0][0]=="u":
+            proto=u"udp"
+        elif l[0][0]=="t":
+            proto=u"tcp"
+        else:
+            proto=u"tcp/udp"
+
+
+        if proto==u"tcp":
+            if dato=="bytes":
+                d=self.cap.stats['bytes_tcpshare']
+                total=self.cap.stats['bytes_tcp']
+            else:
+                d=self.cap.stats['pkts_tcpshare']
+                total=self.cap.stats['packets_tcp']
+            sorted_d = sorted(d.items(), key=operator.itemgetter(1), reverse=True)
+            lista=map(lambda c: (u"tcp",c[0],c[1]), sorted_d)
+        elif proto==u"udp":
+            if dato=="bytes":
+                d=self.cap.stats['bytes_udpshare']
+                total=self.cap.stats['bytes_udp']
+            else:
+                d=self.cap.stats['pkts_udpshare']
+                total=self.cap.stats['packets_udp']
+            sorted_d = sorted(d.items(), key=operator.itemgetter(1), reverse=True)
+            lista=map(lambda c: (u"tcp",c[0],c[1]), sorted_d)
+        else:
+            if dato=="bytes":
+                x=self.cap.stats['bytes_udpshare'].items()
+                b=map(lambda x: (u"udp",x[0],x[1]), x)
+                x=self.cap.stats['bytes_tcpshare'].items()
+                c=map(lambda x: (u"tcp",x[0],x[1]), x)
+                b.extend(c)
+                lista=sorted(b, key=lambda tup: tup[2],reverse=True)
+                total=self.cap.stats['bytes_tcp']+self.cap.stats['bytes_udp']
+            else:
+                x=self.cap.stats['pkts_udpshare'].items()
+                b=map(lambda x: (u"udp",x[0],x[1]), x)
+                x=self.cap.stats['pkts_tcpshare'].items()
+                c=map(lambda x: (u"tcp",x[0],x[1]), x)
+                b.extend(c)
+                lista=sorted(b, key=lambda tup: tup[2],reverse=True)
+                total=self.cap.stats['packets_tcp']+self.cap.stats['packets_udp']
+        print dato+":"
+        for i in lista:
+            n=self.cap.service_name(i[0],i[1])
+            pct="{0:.0f}%".format((float(i[2])/total)*100)
+            print("{:<12} {:<12} {:<4} {:<20}".format(i[0]+"/"+str(i[1]), str(i[2]), pct, n))
